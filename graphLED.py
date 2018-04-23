@@ -74,15 +74,17 @@ if __name__ == '__main__':
 
     graph = GraphLED([7, 8, 25, 18, 15, 14])
 
-    print(graph.leds)
-
-    quit()
+    print('LEDs: ', graph.leds)
 
     print('running...')
     while True:
-        if graph.value > 100:
-            graph.value = 0
+        try:
+            if graph.value > 100:
+                graph.value = 0
 
-        time.sleep(0.01)
+            time.sleep(0.01)
 
-        graph.value += 1
+            graph.value += 1
+        except KeyboardInterrupt:
+            graph.setup_leds()
+            quit(0)
