@@ -1,5 +1,6 @@
 from wiringpi import wiringPiSPISetup as spiSetup
 from wiringpi import wiringPiSPIDataRW as spiRW
+import copy
 
 # SPI Speed
 MAX7219_HZ = 1000000
@@ -20,6 +21,12 @@ MAX7219_REG_SCANLIMIT = 0xB
 MAX7219_REG_SHUTDOWN = 0xC
 MAX7219_REG_DISPLAYTEST = 0xF
 
+# Rotation
+ROTATION_0 = 0
+ROTATION_90 = 1
+ROTATION_180 = 2
+ROTATION_270 = 3
+
 class Matrix8X8:
     """
     Matrix(s) of 8x8 LEDs controlled by a MAX7219
@@ -39,7 +46,7 @@ class Matrix8X8:
         MAX7219_REG_DIGIT7
     ]
 
-    def __init__(self, channel=0, auto_update=True, number_screens=1, **kwargs):
+    def __init__(self, channel=0, auto_update=True, number_screens=1, brightness=15, **kwargs):
         """
         Args:
             channel (int): Channel for SPI communication
@@ -49,9 +56,11 @@ class Matrix8X8:
         Keyword Args:
             flip_x (bool): Flip X of the frame when drawing it to the screen.
             flip_y (bool): Flip Y of the frame when drawing it to the screen.
+            rotation (int): Rotation of the frame when drawing it to the screen
 
         """
-        self.channel = channel
+        self._brightness = brightness
+        self._channel = channel
         self.auto_update = True
         self.number_screens = number_screens
         self.frame = [
@@ -66,13 +75,21 @@ class Matrix8X8:
         ]
 
         # Keyword Args
+        self.rotation = kwargs.get('rotation')
+        if not self.rotation:
+            self.rotation = ROTATION_0
+
         self.flip_x = kwargs.get('flip_x')
         self.flip_y = kwargs.get('flip_y')
 
+        # Initialization
+        spiSetup(self.channel, MAX7219_HZ)  # SPI Channel
+        self.__setup_screen()  # MAX1729 Registers
+
     def __setup_screen(self, screen=0):
         spiRW(self.channel, bytes([MAX7219_REG_DECODEMODE, 0x0]))  # Don't decode the bytes in any digit
-        spiRW(self.channel, bytes([MAX7219_REG_SCANLIMIT, 0x7]))  # Scan limit to all (8x8)
-        spiRW(self.channel, bytes([MAX7219_REG_INTENSITY, 0x5]))  # Intensity to half
+        spiRW(self.channel, bytes([MAX7219_REG_SCANLIMIT, 0x7]))  # Scan limit to all (8x8) - Don't use it to clear the screen
+        spiRW(self.channel, bytes([MAX7219_REG_INTENSITY, self._brightness]))  # Brightness (0-15)
         spiRW(self.channel, bytes([MAX7219_REG_SHUTDOWN, 0x1]))  # Normal Operation
 
     def clear_screen(self, screen=0):
@@ -108,24 +125,44 @@ class Matrix8X8:
             self.update_screen()
 
     def update_screen(self, screen=0):
+        frame = copy.copy(self.frame)
+
+        # Flippity flips
+        if self.flip_y:
+            frame = frame[::-1]
+        if self.flip_x:
+            flipped_frame = []
+            for f in frame:
+                flipped_frame.append(f[::-1])
+            frame = flipped_frame
+
+        # Rotation stuff
+        if self.rotation != ROTATION_0:
+            rotated_frame = copy.deepcopy(frame)
+
+            if self.rotation == ROTATION_90:
+                count_x = 7
+                count_y = 0
+                for line_y in frame:
+                    for point in line_y:
+                        rotated_frame[count_y][count_x] = point
+                        count_y += 1
+                    count_y = 0
+                    count_x -= 1
+
+                frame = rotated_frame
+
         # Create bytes
         screen_bytes = []
-        for f in self.frame:
+        for f in frame:
             # Convert to byte and append
-            if self.flip_y:
-                f_str = [str(x) for x in f[::-1]]
-            else:
-                f_str = [str(x) for x in f]
+            f_str = [str(x) for x in f]
             f_bytes = int(''.join(f_str), 2)
             screen_bytes.append(f_bytes)
 
         # Write to registers
-        if self.flip_x:
-            for i, reg in enumerate(Matrix8X8.display_registers[::-1]):
-                spiRW(self.channel, bytes([reg, screen_bytes[i]]))
-        else:
-            for i, reg in enumerate(Matrix8X8.display_registers):
-                spiRW(self.channel, bytes([reg, screen_bytes[i]]))
+        for i, reg in enumerate(Matrix8X8.display_registers):
+            spiRW(self.channel, bytes([reg, screen_bytes[i]]))
 
     @property
     def channel(self):
@@ -141,21 +178,22 @@ class Matrix8X8:
 if __name__ == '__main__':
     from time import sleep
 
-    matrix = Matrix8X8(flip_y=True)
+    matrix = Matrix8X8(brightness=15, rotation=ROTATION_90)
 
     print('running')
-    matrix.set_point(0, 0)
-    matrix.set_point(0, 1)
-    matrix.set_point(0, 2)
-    matrix.set_point(0, 3)
-    matrix.set_point(0, 4)
 
-    matrix.set_point(7, 3)
-    matrix.set_point(7, 7)
+    while True:
+        for y in range(8):
+            for x in range(8):
+                matrix.set_point(x,y)
+                sleep(0.033)
 
-    sleep(3)
+        for y in range(7, -1, -1):
+            for x in range(7, -1, -1):
+                matrix.set_point(x, y, False)
+                sleep(0.033)
 
-    matrix.clear_screen()
+    #matrix.clear_screen()
 
 # CHANNEL = 0
 #
