@@ -24,8 +24,9 @@ MAX7219_REG_DISPLAYTEST = 0xF
 # Rotation
 ROTATION_0 = 0
 ROTATION_90 = 1
-ROTATION_180 = 2
-ROTATION_270 = 3
+ROTATION_270 = 2
+ROTATION_180 = 3
+
 
 class Matrix8X8:
     """
@@ -35,6 +36,7 @@ class Matrix8X8:
         display_registers (list): List of the registers for the MAX7219 (CLASS)
         frame: Frame to draw to the "screen" (matrix)
     """
+
     display_registers = [
         MAX7219_REG_DIGIT0,
         MAX7219_REG_DIGIT1,
@@ -56,23 +58,13 @@ class Matrix8X8:
         Keyword Args:
             flip_x (bool): Flip X of the frame when drawing it to the screen.
             flip_y (bool): Flip Y of the frame when drawing it to the screen.
-            rotation (int): Rotation of the frame when drawing it to the screen
+            rotation (int): Rotation of the frame when drawing it to the screen, to rotate 180° just flip x and flip y
 
         """
         self._brightness = brightness
         self._channel = channel
-        self.auto_update = True
+        self.auto_update = auto_update
         self.number_screens = number_screens
-        self.frame = [
-            [0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0],
-            [0,0,0,0,0,0,0,0]
-        ]
 
         # Keyword Args
         self.rotation = kwargs.get('rotation')
@@ -86,9 +78,11 @@ class Matrix8X8:
         spiSetup(self.channel, MAX7219_HZ)  # SPI Channel
         self.__setup_screen()  # MAX1729 Registers
 
+        self.clear_screen()
+
     def __setup_screen(self, screen=0):
         spiRW(self.channel, bytes([MAX7219_REG_DECODEMODE, 0x0]))  # Don't decode the bytes in any digit
-        spiRW(self.channel, bytes([MAX7219_REG_SCANLIMIT, 0x7]))  # Scan limit to all (8x8) - Don't use it to clear the screen
+        spiRW(self.channel, bytes([MAX7219_REG_SCANLIMIT, 0x7]))  # Scan limit to all (8x8) - Don't use it to clear the screen!!!s
         spiRW(self.channel, bytes([MAX7219_REG_INTENSITY, self._brightness]))  # Brightness (0-15)
         spiRW(self.channel, bytes([MAX7219_REG_SHUTDOWN, 0x1]))  # Normal Operation
 
@@ -103,7 +97,6 @@ class Matrix8X8:
             [0, 0, 0, 0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0, 0, 0, 0]
         ]
-        self.update_screen()
 
     def fill_screen(self, screen=0):
         self.frame = [
@@ -116,7 +109,6 @@ class Matrix8X8:
             [1, 1, 1, 1, 1, 1, 1, 1],
             [1, 1, 1, 1, 1, 1, 1, 1]
         ]
-        self.update_screen()
 
     def set_point(self, x, y, value=True, screen=0):
         value = int(bool(value))
@@ -138,8 +130,7 @@ class Matrix8X8:
 
         # Rotation stuff
         if self.rotation != ROTATION_0:
-            rotated_frame = copy.deepcopy(frame)
-
+            rotated_frame = Matrix8X8.get_empty_frame(8, 8)
             if self.rotation == ROTATION_90:
                 count_x = 7
                 count_y = 0
@@ -150,7 +141,27 @@ class Matrix8X8:
                     count_y = 0
                     count_x -= 1
 
-                frame = rotated_frame
+            if self.rotation == ROTATION_270:
+                count_x = 0
+                count_y = 7
+                for line_y in frame:
+                    for point in line_y:
+                        rotated_frame[count_y][count_x] = point
+                        count_y -= 1
+                    count_y = 7
+                    count_x += 1
+
+            if self.rotation == ROTATION_180:
+                count_x = 7
+                count_y = 7
+                for line_y in frame:
+                    for point in line_y:
+                        rotated_frame[count_y][count_x] = point
+                        count_x -= 1
+                    count_x = 7
+                    count_y -= 1
+
+            frame = rotated_frame
 
         # Create bytes
         screen_bytes = []
@@ -174,26 +185,78 @@ class Matrix8X8:
         spiSetup(self.channel, MAX7219_HZ)
         self.__setup_screen()
 
+    @property
+    def frame(self):
+        return self._frame
+
+    @frame.setter
+    def frame(self, new_frame):
+        self._frame = new_frame
+
+        if self.auto_update:
+            self.update_screen()
+
+    @staticmethod
+    def get_empty_frame(width, height):
+        new_frame = []
+        for y in range(height):
+            line_y = []
+            for x in range(width):
+                line_y.append(0)
+            new_frame.append(line_y)
+        return new_frame
+
 
 if __name__ == '__main__':
     from time import sleep
 
-    matrix = Matrix8X8(brightness=15, rotation=ROTATION_90)
+    from charset8x8 import charset8x8
+
+    matrix = Matrix8X8(brightness=7, rotation=ROTATION_90)
 
     print('running')
 
-    while True:
-        for y in range(8):
-            for x in range(8):
-                matrix.set_point(x,y)
-                sleep(0.033)
+    for c in charset8x8.values():
+        matrix.frame = c
+        sleep(1)
 
-        for y in range(7, -1, -1):
-            for x in range(7, -1, -1):
-                matrix.set_point(x, y, False)
-                sleep(0.033)
 
-    #matrix.clear_screen()
+    # while True:
+    #     for y in range(8):
+    #         for x in range(8):
+    #             matrix.set_point(x,y)
+    #             sleep(0.016)
+    #
+    #     for y in range(7, -1, -1):
+    #         for x in range(7, -1, -1):
+    #             matrix.set_point(x, y, False)
+    #             sleep(0.016)
+
+    # ball_x, ball_y = 4,0
+    # dir_x , dir_y = 1,-1
+    #
+    # while True:
+    #     ball_x += dir_x
+    #     ball_y += dir_y
+    #
+    #     if ball_y <= 0 or ball_y >= 7:
+    #         dir_y *= -1
+    #     if ball_x <= 0 or ball_x >= 7:
+    #         dir_x *= -1
+    #
+    #     if ball_y < 0:
+    #         ball_y = 0
+    #     if ball_y > 7:
+    #         ball_y = 7
+    #     if ball_x < 0:
+    #         ball_x = 0
+    #     if ball_x > 7:
+    #         ball_x = 7
+    #
+    #     matrix.clear_screen()
+    #     matrix.set_point(ball_x, ball_y)
+    #     sleep(0.033)
+
 
 # CHANNEL = 0
 #
