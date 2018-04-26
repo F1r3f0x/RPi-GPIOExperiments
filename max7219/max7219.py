@@ -196,16 +196,16 @@ class Matrix8X8:
         if self.auto_update:
             self.update_screen()
 
-    @staticmethod
-    def get_valid_frame(frame):
+    @classmethod
+    def get_valid_frame(cls, frame):
         valid_frame = Matrix8X8.get_empty_frame(8, 8)
         for y in range(8):
             for x in range(8):
                 valid_frame[y][x] = frame[y][x]
         return valid_frame
 
-    @staticmethod
-    def get_empty_frame(width, height):
+    @classmethod
+    def get_empty_frame(cls, width, height):
         new_frame = []
         for y in range(height):
             line_y = []
@@ -214,14 +214,14 @@ class Matrix8X8:
             new_frame.append(line_y)
         return new_frame
 
-    @staticmethod
-    def get_shift_frame(frame, shift):
+    @classmethod
+    def get_shift_frame(cls, frame, shift):
         if shift == 0:
             return frame
 
         shifted_frame = Matrix8X8.get_empty_frame(8, 8)
 
-        frame_cpy = copy.deepcopy(frame)
+        frame_cpy = copy.copy(frame)
 
         count_x = shift
 
@@ -236,19 +236,8 @@ class Matrix8X8:
 
         return shifted_frame
 
-
-if __name__ == '__main__':
-    from time import sleep
-
-    from charset8x8 import charset8x8
-
-    matrix = Matrix8X8(brightness=15, rotation=ROTATION_90)
-
-    print('running')
-
-    # Scrolling Text
-
-    def get_scrollable_string_chars(chars):
+    @classmethod
+    def get_scrollable_string_chars(cls, chars):
         string = Matrix8X8.get_empty_frame(8*(len(chars)+1), 8)
         count_x = 8
         for char in chars:
@@ -260,69 +249,89 @@ if __name__ == '__main__':
         return string
 
 
-    string = get_scrollable_string_chars(
-        [
-            charset8x8['S'],
-            charset8x8['E'],
-            charset8x8['N'],
-            charset8x8['D'],
-            Matrix8X8.get_empty_frame(8, 8),
-            charset8x8['N'],
-            charset8x8['U'],
-            charset8x8['D'],
-            charset8x8['E'],
-            charset8x8['S'],
-        ]
-    )
+def example_scroll_text():
+    from time import sleep
+    from charset8x8 import charset8x8
 
-    # print('set')
-    # matrix.set_frame(charset8x8['A'], 2)
+    matrix = Matrix8X8(brightness=1, rotation=ROTATION_90)
+
+    print('running')
+
+    # Scrolling Text
+
+    string = matrix.get_scrollable_string_chars(
+        [x for x in charset8x8.values()]
+    )
 
     count = 0
     while True:
         matrix.set_frame(string, count)
         count += 1
         if count >= len(string[0]):
-            count = 0
-        sleep(0.09)
+            break
+        sleep(0.07)
 
 
-    # while True:
-    #     for y in range(8):
-    #         for x in range(8):
-    #             matrix.set_point(x,y)
-    #             sleep(0.016)
-    #
-    #     for y in range(7, -1, -1):
-    #         for x in range(7, -1, -1):
-    #             matrix.set_point(x, y, False)
-    #             sleep(0.016)
+def example_ball():
+    from time import sleep
 
-    # ball_x, ball_y = 4,0
-    # dir_x , dir_y = 1,-1
-    #
-    # while True:
-    #     ball_x += dir_x
-    #     ball_y += dir_y
-    #
-    #     if ball_y <= 0 or ball_y >= 7:
-    #         dir_y *= -1
-    #     if ball_x <= 0 or ball_x >= 7:
-    #         dir_x *= -1
-    #
-    #     if ball_y < 0:
-    #         ball_y = 0
-    #     if ball_y > 7:
-    #         ball_y = 7
-    #     if ball_x < 0:
-    #         ball_x = 0
-    #     if ball_x > 7:
-    #         ball_x = 7
-    #
-    #     matrix.clear_screen()
-    #     matrix.set_point(ball_x, ball_y)
-    #     sleep(0.033)
+    matrix = Matrix8X8(brightness=1, rotation=ROTATION_90)
 
+    print('running')
+
+    ball_x, ball_y = 4,0
+    dir_x , dir_y = 1,-1
+
+    for i in range(round(100)):
+        ball_x += dir_x
+        ball_y += dir_y
+
+        if ball_y <= 0 or ball_y >= 7:
+            dir_y *= -1
+        if ball_x <= 0 or ball_x >= 7:
+            dir_x *= -1
+
+        if ball_y < 0:
+            ball_y = 0
+        if ball_y > 7:
+            ball_y = 7
+        if ball_x < 0:
+            ball_x = 0
+        if ball_x > 7:
+            ball_x = 7
+
+        matrix.clear_screen()
+        matrix.set_point(ball_x, ball_y)
+        sleep(0.033)
+
+
+def example_anim():
+    from time import sleep
+
+    matrix = Matrix8X8(brightness=1, rotation=ROTATION_90)
+
+    print('running')
+
+    for i in range(4):
+        for y in range(8):
+            for x in range(8):
+                matrix.set_point(x,y)
+                sleep(0.016)
+
+        for y in range(7, -1, -1):
+            for x in range(7, -1, -1):
+                matrix.set_point(x, y, False)
+                sleep(0.016)
+
+
+if __name__ == '__main__':
+    try:
+        example_scroll_text()
+        example_ball()
+        example_anim()
+    except KeyboardInterrupt:
+        matrix = Matrix8X8(brightness=1, rotation=ROTATION_90)
+        matrix.clear_screen()
 
 # CHANNEL = 0
 #
