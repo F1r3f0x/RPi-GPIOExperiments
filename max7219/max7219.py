@@ -75,19 +75,20 @@ class Matrix8X8:
         self.flip_y = kwargs.get('flip_y')
 
         # Initialization
-        spiSetup(self.channel, MAX7219_HZ)  # SPI Channel
+        spiSetup(self._channel, MAX7219_HZ)  # SPI Channel
         self.__setup_screen()  # MAX1729 Registers
 
+        self._frame = self.get_empty_frame(8, 8)
         self.clear_screen()
 
     def __setup_screen(self, screen=0):
-        spiRW(self.channel, bytes([MAX7219_REG_DECODEMODE, 0x0]))  # Don't decode the bytes in any digit
-        spiRW(self.channel, bytes([MAX7219_REG_SCANLIMIT, 0x7]))  # Scan limit to all (8x8) - Don't use it to clear the screen!!!s
-        spiRW(self.channel, bytes([MAX7219_REG_INTENSITY, self._brightness]))  # Brightness (0-15)
-        spiRW(self.channel, bytes([MAX7219_REG_SHUTDOWN, 0x1]))  # Normal Operation
+        spiRW(self._channel, bytes([MAX7219_REG_DECODEMODE, 0x0]))  # Don't decode the bytes in any digit
+        spiRW(self._channel, bytes([MAX7219_REG_SCANLIMIT, 0x7]))  # Scan limit to all (8x8) - Don't use it to clear the screen!!!s
+        spiRW(self._channel, bytes([MAX7219_REG_INTENSITY, self._brightness]))  # Brightness (0-15)
+        spiRW(self._channel, bytes([MAX7219_REG_SHUTDOWN, 0x1]))  # Normal Operation
 
     def clear_screen(self, screen=0):
-        self.frame = [
+        self.set_frame([
             [0, 0, 0, 0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0, 0, 0, 0],
@@ -96,10 +97,10 @@ class Matrix8X8:
             [0, 0, 0, 0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0, 0, 0, 0],
             [0, 0, 0, 0, 0, 0, 0, 0]
-        ]
+        ])
 
     def fill_screen(self, screen=0):
-        self.frame = [
+        self.set_frame([
             [1, 1, 1, 1, 1, 1, 1, 1],
             [1, 1, 1, 1, 1, 1, 1, 1],
             [1, 1, 1, 1, 1, 1, 1, 1],
@@ -108,16 +109,16 @@ class Matrix8X8:
             [1, 1, 1, 1, 1, 1, 1, 1],
             [1, 1, 1, 1, 1, 1, 1, 1],
             [1, 1, 1, 1, 1, 1, 1, 1]
-        ]
+        ])
 
     def set_point(self, x, y, value=True, screen=0):
         value = int(bool(value))
-        self.frame[y][x] = value
+        self._frame[y][x] = value
         if self.auto_update:
             self.update_screen()
 
     def update_screen(self, screen=0):
-        frame = copy.copy(self.frame)
+        frame = copy.copy(self._frame)
 
         # Flippity flips
         if self.flip_y:
@@ -130,7 +131,7 @@ class Matrix8X8:
 
         # Rotation stuff
         if self.rotation != ROTATION_0:
-            rotated_frame = Matrix8X8.get_empty_frame(8, 8)
+            rotated_frame = self.get_empty_frame(8, 8)
             if self.rotation == ROTATION_90:
                 count_x = 7
                 count_y = 0
@@ -173,28 +174,35 @@ class Matrix8X8:
 
         # Write to registers
         for i, reg in enumerate(Matrix8X8.display_registers):
-            spiRW(self.channel, bytes([reg, screen_bytes[i]]))
+            spiRW(self._channel, bytes([reg, screen_bytes[i]]))
 
-    @property
-    def channel(self):
+    def get_channel(self):
         return self._channel
 
-    @channel.setter
-    def channel(self, channel):
+    def set_channel(self, channel):
         self._channel = channel
-        spiSetup(self.channel, MAX7219_HZ)
+        spiSetup(self._channel, MAX7219_HZ)
         self.__setup_screen()
 
-    @property
-    def frame(self):
+    def get_frame(self):
         return self._frame
 
-    @frame.setter
-    def frame(self, new_frame):
-        self._frame = new_frame
+    def set_frame(self, frame, shift=0):
+        if shift == 0:
+            self._frame = self.get_valid_frame(frame)
+        else:
+            self._frame = self.get_shift_frame(frame, shift)
 
         if self.auto_update:
             self.update_screen()
+
+    @staticmethod
+    def get_valid_frame(frame):
+        valid_frame = Matrix8X8.get_empty_frame(8, 8)
+        for y in range(8):
+            for x in range(8):
+                valid_frame[y][x] = frame[y][x]
+        return valid_frame
 
     @staticmethod
     def get_empty_frame(width, height):
@@ -206,19 +214,77 @@ class Matrix8X8:
             new_frame.append(line_y)
         return new_frame
 
+    @staticmethod
+    def get_shift_frame(frame, shift):
+        if shift == 0:
+            return frame
+
+        shifted_frame = Matrix8X8.get_empty_frame(8, 8)
+
+        frame_cpy = copy.deepcopy(frame)
+
+        count_x = shift
+
+        for x in range(8):
+            for y in range(8):
+                try:
+                    shifted_frame[y][x] = frame_cpy[y][count_x]
+                except IndexError:
+                    shifted_frame[y][x] = 0
+
+            count_x += 1
+
+        return shifted_frame
+
 
 if __name__ == '__main__':
     from time import sleep
 
     from charset8x8 import charset8x8
 
-    matrix = Matrix8X8(brightness=7, rotation=ROTATION_90)
+    matrix = Matrix8X8(brightness=15, rotation=ROTATION_90)
 
     print('running')
 
-    for c in charset8x8.values():
-        matrix.frame = c
-        sleep(1)
+    # Scrolling Text
+
+    def get_scrollable_string_chars(chars):
+        string = Matrix8X8.get_empty_frame(8*(len(chars)+1), 8)
+        count_x = 8
+        for char in chars:
+            for x in range(8):
+                for y in range(8):
+                    string[y][count_x] = char[y][x]
+                count_x += 1
+
+        return string
+
+
+    string = get_scrollable_string_chars(
+        [
+            charset8x8['S'],
+            charset8x8['E'],
+            charset8x8['N'],
+            charset8x8['D'],
+            Matrix8X8.get_empty_frame(8, 8),
+            charset8x8['N'],
+            charset8x8['U'],
+            charset8x8['D'],
+            charset8x8['E'],
+            charset8x8['S'],
+        ]
+    )
+
+    # print('set')
+    # matrix.set_frame(charset8x8['A'], 2)
+
+    count = 0
+    while True:
+        matrix.set_frame(string, count)
+        count += 1
+        if count >= len(string[0]):
+            count = 0
+        sleep(0.09)
 
 
     # while True:
