@@ -74,7 +74,7 @@ class Matrix8X8:
         self.flip_x = kwargs.get('flip_x')
         self.flip_y = kwargs.get('flip_y')
 
-        # Initialization
+        # MAX7219 Initialization
         spiSetup(self._channel, MAX7219_HZ)  # SPI Channel
         self.__setup_screen()  # MAX1729 Registers
 
@@ -325,12 +325,23 @@ def example_anim():
 
 
 if __name__ == '__main__':
+    from time import sleep
+    from charset8x8 import charset8x8
+    matrix = Matrix8X8(brightness=1, rotation=ROTATION_90)
     try:
-        example_scroll_text()
-        example_ball()
-        example_anim()
+        chars = list(charset8x8.values())
+
+        string_chars = matrix.get_scrollable_string_chars(chars)
+
+        count = 0
+        while count <= len(string_chars[0]):
+            matrix.set_frame(string_chars, count)
+            count += 1
+            sleep(0.09)
+
+        matrix.clear_screen()
+
     except KeyboardInterrupt:
-        matrix = Matrix8X8(brightness=1, rotation=ROTATION_90)
         matrix.clear_screen()
 
 # CHANNEL = 0
