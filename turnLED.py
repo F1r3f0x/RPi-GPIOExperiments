@@ -1,18 +1,11 @@
 from time import sleep
-import wiringpi
+from gpiozero import LED
 
-OUTPUT = wiringpi.OUTPUT
-INPUT = wiringpi.INPUT
-HIGH = wiringpi.HIGH
-LOW = wiringpi.LOW
+selected_pin = input('led pin: ')  # See: https://gpiozero.readthedocs.io/en/stable/recipes.html#pin-numbering
 
-# Setup with BCM Pin Numbers
-wiringpi.wiringPiSetupGpio()
-
-led = int(input('led pin: '))
-wiringpi.pinMode(led, OUTPUT)
+led = LED(selected_pin)
 
 print('blink!')
-wiringpi.digitalWrite(led, HIGH)
+led.on()
 sleep(4)
-wiringpi.digitalWrite(led, LOW)
+led.off()
