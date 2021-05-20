@@ -1,23 +1,20 @@
-# WARINING: Hardware GPIO needs sudo or you RPi WILL CRASH.
 from time import sleep
-import wiringpi as wpi
+from gpiozero import PWMLED
 
-wpi.wiringPiSetupGpio()
+pwm_led = PWMLED('GPIO13')
 
-pin_led = 18
 
-print('hola')
+# Blink the easy way
+print('I\'m blinking!')
+pwm_led.blink(0.5, 0.25, n=25, background=False)
 
-wpi.pinMode(pin_led, wpi.PWM_OUTPUT)
+
+# Change the brightnes with PWM
 while True:
-    print('loop')
-    wpi.pwmWrite(pin_led, 200)
-    sleep(1)
-    wpi.pwmWrite(pin_led, 500)
-    sleep(1)
-    wpi.pwmWrite(pin_led, 700)
-    sleep(1)
-    wpi.pwmWrite(pin_led, 1024)
-    sleep(1)
-    wpi.pwmWrite(pin_led, 0)
-    sleep(1)
+    print('I\'m glowing!')
+    for v in range(0, 11):
+        pwm_led.value = v/10
+        sleep(0.25)
+    for v in range(10, -1, -1):
+        pwm_led.value = v/10
+        sleep(0.25)
